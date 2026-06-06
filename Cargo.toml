@@ -6,6 +6,7 @@ description = "Terminal front-end for the synth modular synthesizer platform."
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
 # Committed as a git dependency so a standalone clone of synth-cli builds with no setup.
 # In the dev workspace this is redirected to the local submodule via [patch] (see dev repo Cargo.toml).
 synth-core = { git = "ssh://git@github.com/hypafrag/synth-core.git", branch = "master" }
