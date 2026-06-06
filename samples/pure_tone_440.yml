@@ -1,0 +1,19 @@
+# A 440 Hz pure tone at 0.5 level, sent to both stereo channels of the default audio device.
+version: 1
+nodes:
+  - id: freq
+    type: const_generator
+    params: { value: 440.0 }
+  - id: amp
+    type: const_generator
+    params: { value: 0.5 }
+  - id: osc
+    type: sine_generator
+  - id: out
+    type: audio_output
+    params: { sample_rate: 44100, channels: 2 }
+wires:
+  - { from: [freq, out], to: [osc, frequency] }
+  - { from: [amp,  out], to: [osc, amplitude] }
+  - { from: [osc, out], to: [out, ch0] }
+  - { from: [osc, out], to: [out, ch1] }

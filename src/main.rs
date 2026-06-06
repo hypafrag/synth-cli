@@ -6,7 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clap::{Parser, Subcommand};
+use synth_core::engine::Engine;
 use synth_core::model::Patch;
+use synth_core::registry::Registry;
+
+/// Maximum audio block size (frames) the engine pre-allocates for.
+const MAX_FRAMES: usize = 16384;
 
 #[derive(Parser)]
 #[command(name = "synth-cli", about = "synth modular synthesizer — CLI")]
@@ -17,6 +22,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum CliCommand {
+    /// Run a patch (.yml): build the engine and play it on the default audio device.
+    Run {
+        /// Input patch YAML.
+        input: PathBuf,
+    },
     /// Render a patch (.yml) to an image via Graphviz.
     Render {
         /// Input patch YAML.
@@ -28,7 +38,27 @@ enum CliCommand {
 
 fn main() -> Result<(), Box<dyn Error>> {
     match Cli::parse().command {
+        CliCommand::Run { input } => run(&input),
         CliCommand::Render { input, output } => render(&input, &output),
+    }
+}
+
+fn run(input: &Path) -> Result<(), Box<dyn Error>> {
+    let yaml = std::fs::read_to_string(input)
+        .map_err(|e| format!("reading {}: {e}", input.display()))?;
+    let patch = Patch::from_yaml(&yaml)?;
+    let engine = Engine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
+
+    let sample_rate = engine.sample_rate();
+    let channels = engine.channels();
+    let _stream = synth_core::audio::run_default_output(engine)?;
+
+    println!(
+        "playing {} at {sample_rate} Hz, {channels} ch — press Ctrl-C to stop",
+        input.display()
+    );
+    loop {
+        std::thread::park();
     }
 }
 
