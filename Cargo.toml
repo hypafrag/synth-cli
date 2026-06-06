@@ -3,6 +3,7 @@ name = "synth-cli"
 version = "0.1.0"
 edition = "2024"
 description = "Terminal front-end for the synth modular synthesizer platform."
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 # Committed as a git dependency so a standalone clone of synth-cli builds with no setup.
