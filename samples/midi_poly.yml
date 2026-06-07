@@ -1,0 +1,54 @@
+# Polyphonic MIDI instrument: each held key spawns a voice (sine osc shaped by an ADSR via a
+# VCA). The engine isolates everything downstream of `keys` into per-voice slots and sums the
+# active voices at the output. Play it with `synth-cli run` and a connected MIDI keyboard.
+version: 1
+nodes:
+  - id: keys
+    type: midi_keyboard
+
+  # Per-voice oscillator: frequency tracks the voice's pitch (Hz).
+  - id: amp
+    type: const_generator
+    params: { value: 1.0 }
+  - id: osc
+    type: sine_generator
+
+  # Per-voice ADSR, gated by the key.
+  - id: attack
+    type: const_generator
+    params: { value: 0.01 }
+  - id: decay
+    type: const_generator
+    params: { value: 0.1 }
+  - id: sustain
+    type: const_generator
+    params: { value: 0.7 }
+  - id: release
+    type: const_generator
+    params: { value: 0.3 }
+  - id: env
+    type: adsr_envelope
+
+  # VCA: oscillator × envelope.
+  - id: vca
+    type: mul
+
+  - id: out
+    type: audio_output
+    params: { sample_rate: 44100, channels: 2 }
+
+wires:
+  - { from: [keys, pitch], to: [osc, frequency] }
+  - { from: [amp,  out],   to: [osc, amplitude] }
+
+  - { from: [keys, gate],   to: [env, gate] }
+  - { from: [attack,  out], to: [env, attack] }
+  - { from: [decay,   out], to: [env, decay] }
+  - { from: [sustain, out], to: [env, sustain] }
+  - { from: [release, out], to: [env, release] }
+
+  - { from: [osc, out], to: [vca, a] }
+  - { from: [env, out], to: [vca, b] }
+
+  - { from: [vca, out], to: [out, ch0] }
+  - { from: [vca, out], to: [out, ch1] }

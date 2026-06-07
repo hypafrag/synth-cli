@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clap::{Parser, Subcommand};
-use synth_core::engine::Engine;
 use synth_core::model::Patch;
-use synth_core::registry::Registry;
+use synth_core::module::Registry;
+use synth_core::plan_engine::PlanEngine;
 
 /// Maximum audio block size (frames) the engine pre-allocates for.
 const MAX_FRAMES: usize = 16384;
@@ -61,7 +61,7 @@ fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
     let patch = Patch::from_yaml(&yaml)?;
-    let engine = Engine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
+    let engine = PlanEngine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
 
     let sample_rate = engine.sample_rate();
     let channels = engine.channels();
@@ -78,7 +78,7 @@ fn run(input: &Path) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
     let patch = Patch::from_yaml(&yaml)?;
-    let engine = Engine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
+    let engine = PlanEngine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
 
     let sample_rate = engine.sample_rate();
     let channels = engine.channels();
