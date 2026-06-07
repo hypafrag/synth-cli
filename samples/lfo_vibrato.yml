@@ -22,7 +22,7 @@ nodes:
 
   - id: amp
     type: const_generator
-    params: { value: 0.05 }
+    params: { value: 0.5 }
   - id: carrier
     type: sine_generator
 

@@ -27,8 +27,17 @@ enum CliCommand {
         /// Input patch YAML.
         input: PathBuf,
     },
-    /// Render a patch (.yml) to an image via Graphviz.
+    /// Render a patch (.yml) offline to a WAV file.
     Render {
+        /// Input patch YAML.
+        input: PathBuf,
+        /// Output WAV file.
+        output: PathBuf,
+        /// Seconds of audio to generate.
+        seconds: f64,
+    },
+    /// Draw a patch (.yml) as a graph image via Graphviz.
+    Graph {
         /// Input patch YAML.
         input: PathBuf,
         /// Output image; format is inferred from the extension (e.g. .png, .svg).
@@ -39,8 +48,30 @@ enum CliCommand {
 fn main() -> Result<(), Box<dyn Error>> {
     match Cli::parse().command {
         CliCommand::Run { input } => run(&input),
-        CliCommand::Render { input, output } => render(&input, &output),
+        CliCommand::Render {
+            input,
+            output,
+            seconds,
+        } => render(&input, &output, seconds),
+        CliCommand::Graph { input, output } => graph(&input, &output),
     }
+}
+
+fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error>> {
+    let yaml = std::fs::read_to_string(input)
+        .map_err(|e| format!("reading {}: {e}", input.display()))?;
+    let patch = Patch::from_yaml(&yaml)?;
+    let engine = Engine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
+
+    let sample_rate = engine.sample_rate();
+    let channels = engine.channels();
+    synth_core::wav::render_to_wav(engine, output, seconds)?;
+
+    println!(
+        "rendered {seconds}s to {} ({sample_rate} Hz, {channels} ch)",
+        output.display()
+    );
+    Ok(())
 }
 
 fn run(input: &Path) -> Result<(), Box<dyn Error>> {
@@ -62,7 +93,7 @@ fn run(input: &Path) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn render(input: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
+fn graph(input: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
     let patch = Patch::from_yaml(&yaml)?;
