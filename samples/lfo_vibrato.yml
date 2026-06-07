@@ -1,0 +1,41 @@
+# A 440 Hz-ish tone whose frequency is swept 400..480 Hz by a 10 Hz sine LFO (vibrato).
+# The LFO sine outputs [-1, 1]; a `range` module maps that to [400, 480] Hz for the carrier.
+version: 1
+nodes:
+  - id: lfo_freq
+    type: const_generator
+    params: { value: 10.0 }       # LFO rate (Hz)
+  - id: lfo_amp
+    type: const_generator
+    params: { value: 1.0 }        # full [-1, 1] swing
+  - id: lfo
+    type: sine_generator
+
+  - id: low
+    type: const_generator
+    params: { value: 400.0 }
+  - id: high
+    type: const_generator
+    params: { value: 480.0 }
+  - id: freq_range
+    type: range                   # maps LFO's [-1, 1] -> [400, 480] Hz
+
+  - id: amp
+    type: const_generator
+    params: { value: 0.05 }
+  - id: carrier
+    type: sine_generator
+
+  - id: out
+    type: audio_output
+    params: { sample_rate: 44100, channels: 2 }
+wires:
+  - { from: [lfo_freq, out], to: [lfo, frequency] }
+  - { from: [lfo_amp,  out], to: [lfo, amplitude] }
+  - { from: [lfo, out],      to: [freq_range, in] }
+  - { from: [low, out],      to: [freq_range, low] }
+  - { from: [high, out],     to: [freq_range, high] }
+  - { from: [freq_range, out], to: [carrier, frequency] }
+  - { from: [amp, out],      to: [carrier, amplitude] }
+  - { from: [carrier, out],  to: [out, ch0] }
+  - { from: [carrier, out],  to: [out, ch1] }
