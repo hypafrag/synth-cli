@@ -7,8 +7,8 @@ use std::process::{Command, Stdio};
 
 use clap::{Parser, Subcommand};
 use synth_core::model::Patch;
-use synth_core::module::Registry;
-use synth_core::plan_engine::PlanEngine;
+use synth_core::module::{OsPermission, Registry};
+use synth_core::plan_engine::{EngineError, PlanEngine};
 
 /// Maximum audio block size (frames) the engine pre-allocates for.
 const MAX_FRAMES: usize = 16384;
@@ -45,7 +45,89 @@ enum CliCommand {
     },
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    if let Err(e) = try_main() {
+        use std::io::IsTerminal;
+        let tty = std::io::stderr().is_terminal();
+        // Downcast to EngineError for structured formatting; fall back to Display for anything else.
+        let msg = if let Some(ee) = e.downcast_ref::<EngineError>() {
+            engine_error_message(ee)
+        } else {
+            e.to_string()
+        };
+        print_error(&msg, tty);
+        std::process::exit(1);
+    }
+}
+
+/// Compose a human-readable, CLI-appropriate error message for an [`EngineError`].
+/// This is the only place in synth-cli that knows how to phrase engine errors for a terminal user.
+fn engine_error_message(e: &EngineError) -> String {
+    match e {
+        EngineError::PermissionDenied { node, permission } => {
+            match permission {
+                OsPermission::Accessibility => {
+                    let app = terminal_app_name();
+                    let url = "x-apple.systempreferences:\
+                               com.apple.preference.security?Privacy_Accessibility";
+                    format!(
+                        "node '{node}': requires Accessibility permission for {app}\n\
+                         {url}\n\
+                         add {app} to the list, then restart"
+                    )
+                }
+            }
+        }
+        other => other.to_string(),
+    }
+}
+
+/// Best-effort name of the terminal emulator, read from the standard `TERM_PROGRAM` env var.
+fn terminal_app_name() -> &'static str {
+    match std::env::var("TERM_PROGRAM").as_deref() {
+        Ok("Apple_Terminal") => "Terminal",
+        Ok("iTerm.app") => "iTerm2",
+        Ok("WezTerm") => "WezTerm",
+        Ok("vscode") => "Visual Studio Code",
+        Ok("Hyper") => "Hyper",
+        _ => "your terminal",
+    }
+}
+
+/// Print a (possibly multi-line) message with an `error:` prefix.  Continuation lines are
+/// indented to align.  In tty mode bare URLs become OSC 8 hyperlinks (clickable in iTerm2,
+/// Terminal.app Ventura+, WezTerm, kitty).
+fn print_error(msg: &str, tty: bool) {
+    let (red, bold, reset) = if tty {
+        ("\x1b[31m", "\x1b[1m", "\x1b[0m")
+    } else {
+        ("", "", "")
+    };
+    const PREFIX: &str = "error: ";
+    const INDENT: &str = "       "; // same visual width as PREFIX
+    let mut lines = msg.lines();
+    if let Some(first) = lines.next() {
+        eprintln!("{bold}{red}{PREFIX}{reset}{first}");
+    }
+    for line in lines {
+        let line = if tty { osc8_if_url(line) } else { line.to_string() };
+        eprintln!("{INDENT}{line}");
+    }
+}
+
+/// Wrap a bare URL in an OSC 8 hyperlink so the terminal renders it as a clickable link.
+fn osc8_if_url(s: &str) -> String {
+    let is_url = s.starts_with("x-apple.systempreferences:")
+        || s.starts_with("https://")
+        || s.starts_with("http://");
+    if is_url {
+        format!("\x1b]8;;{s}\x1b\\{s}\x1b]8;;\x1b\\")
+    } else {
+        s.to_string()
+    }
+}
+
+fn try_main() -> Result<(), Box<dyn Error>> {
     match Cli::parse().command {
         CliCommand::Run { input } => run(&input),
         CliCommand::Render {

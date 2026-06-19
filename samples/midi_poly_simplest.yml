@@ -1,0 +1,22 @@
+version: 1
+nodes:
+  - id: keys
+    type: midi_keyboard
+
+  - id: amp
+    type: const_generator
+    params: { value: -18dB }
+
+  - id: osc
+    type: sine_generator
+
+  - id: out
+    type: audio_output
+    params: { sample_rate: 44100, channels: 2 }
+
+wires:
+  - { from: [keys, pitch], to: [osc, frequency] }
+  - { from: [amp,  out],   to: [osc, amplitude] }
+
+  - { from: [osc, out], to: [out, ch0] }
+  - { from: [osc, out], to: [out, ch1] }
