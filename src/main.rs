@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clap::{Parser, Subcommand};
-use synth_core::model::Patch;
+use synth_core::model::{ParamValue, Patch};
 use synth_core::module::{OsPermission, Registry};
 use synth_core::plan_engine::{EngineError, PlanEngine};
 
@@ -139,10 +139,22 @@ fn try_main() -> Result<(), Box<dyn Error>> {
     }
 }
 
+/// Apply host-level overrides before building the engine. The mode of `ansi_keyboard` is a host
+/// decision (kept out of the patch file so the same patch loads in any host): the CLI uses the
+/// backtick on/off toggle, so it sets `toggle: true`.
+fn cli_patch(mut patch: Patch) -> Patch {
+    for node in &mut patch.nodes {
+        if node.ty == "ansi_keyboard" {
+            node.params.insert("toggle".to_string(), ParamValue::Bool(true));
+        }
+    }
+    patch
+}
+
 fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
-    let patch = Patch::from_yaml(&yaml)?;
+    let patch = cli_patch(Patch::from_yaml(&yaml)?);
     let engine = PlanEngine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
 
     let sample_rate = engine.sample_rate();
@@ -159,7 +171,7 @@ fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error
 fn run(input: &Path) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
-    let patch = Patch::from_yaml(&yaml)?;
+    let patch = cli_patch(Patch::from_yaml(&yaml)?);
     let engine = PlanEngine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
 
     let sample_rate = engine.sample_rate();
