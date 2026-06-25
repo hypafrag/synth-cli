@@ -20,8 +20,8 @@ wires:
   - { from: [keys, pitch], to: [osc, frequency] }
   - { from: [amp,  out],   to: [osc, amplitude] }
 
-  - { from: [osc, out], to: [vca, a] }
-  - { from: [keys, gate], to: [vca, b] }
+  - { from: [osc, out], to: [vca, in] }
+  - { from: [keys, gate], to: [vca, in] }
 
   - { from: [vca, out], to: [out, ch0] }
   - { from: [vca, out], to: [out, ch1] }
