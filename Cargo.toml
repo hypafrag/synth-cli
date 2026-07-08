@@ -7,6 +7,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
+log = "0.4"
+# default-features off drops the regex/humantime/color deps — lighter to build, still supports
+# `RUST_LOG` level + module filtering.
+env_logger = { version = "0.11", default-features = false }
 # Committed as a git dependency so a standalone clone of synth-cli builds with no setup.
 # In the dev workspace this is redirected to the local submodule via [patch] (see dev repo Cargo.toml).
 synth-core = { git = "ssh://git@github.com/hypafrag/synth-core.git", branch = "master" }

@@ -46,6 +46,10 @@ enum CliCommand {
 }
 
 fn main() {
+    // Default to `info`; override with e.g. `RUST_LOG=synth_core::audio=trace` for per-callback
+    // audio tracing. Logs go to stderr, keeping stdout clean for the CLI's own output.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     if let Err(e) = try_main() {
         use std::io::IsTerminal;
         let tty = std::io::stderr().is_terminal();
@@ -151,6 +155,16 @@ fn cli_patch(mut patch: Patch) -> Patch {
     patch
 }
 
+/// Override the `audio_output` node's `sample_rate` so the engine generates at `rate`.
+fn set_output_sample_rate(patch: &mut Patch, rate: u32) {
+    for node in &mut patch.nodes {
+        if node.ty == "audio_output" {
+            node.params
+                .insert("sample_rate".to_string(), ParamValue::Int(rate as i64));
+        }
+    }
+}
+
 fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
@@ -171,7 +185,15 @@ fn render(input: &Path, output: &Path, seconds: f64) -> Result<(), Box<dyn Error
 fn run(input: &Path) -> Result<(), Box<dyn Error>> {
     let yaml = std::fs::read_to_string(input)
         .map_err(|e| format!("reading {}: {e}", input.display()))?;
-    let patch = cli_patch(Patch::from_yaml(&yaml)?);
+    let mut patch = cli_patch(Patch::from_yaml(&yaml)?);
+
+    // Run the engine at the output device's native sample rate. Forcing the patch's rate onto a
+    // device with a different native rate drives some ALSA backends (Raspberry Pi) into a broken
+    // resample path that plays one buffer and then stalls silently.
+    if let Some(dev_rate) = synth_core::audio::default_output_sample_rate() {
+        set_output_sample_rate(&mut patch, dev_rate);
+    }
+
     let engine = PlanEngine::build(&patch, &Registry::with_builtins(), MAX_FRAMES)?;
 
     let sample_rate = engine.sample_rate();
@@ -272,5 +294,17 @@ mod tests {
     fn dot_quote_escapes() {
         assert_eq!(dot_quote("x\"y\\z"), "\"x\\\"y\\\\z\"");
         assert_eq!(dot_quote("a\nb"), "\"a\\nb\"");
+    }
+
+    #[test]
+    fn set_output_sample_rate_overrides_audio_output_node() {
+        let yaml = "nodes:\n  - id: a\n    type: const_generator\n  - id: out\n    type: audio_output\n    params: { sample_rate: 44100, channels: 2 }\nwires:\n  - { from: [a, out], to: [out, ch0] }\n";
+        let mut patch = Patch::from_yaml(yaml).unwrap();
+        set_output_sample_rate(&mut patch, 48000);
+        let out = patch.nodes.iter().find(|n| n.ty == "audio_output").unwrap();
+        assert_eq!(out.params.get("sample_rate"), Some(&ParamValue::Int(48000)));
+        // Non-sink nodes are untouched.
+        let a = patch.nodes.iter().find(|n| n.id == "a").unwrap();
+        assert!(!a.params.contains_key("sample_rate"));
     }
 }
